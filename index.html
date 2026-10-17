@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sound Passage</title>
+<meta name="description" content="Sailing prep for Puget Sound from Shilshole Bay Marina: wind, tides, currents, NOAA chart, route ETA and depth check.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23082f4d'/%3E%3Cpath d='M16 4v19M16 6l9 14H16' fill='%23f0b21a'/%3E%3Cpath d='M6 25h20l-3 3H9z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body data-mtab="now">
+<header class="top">
+  <div class="top-in">
+    <div class="brand"><h1>Sound Passage</h1><span class="sub">Shilshole Bay Marina · Ballard · 47°40.8′N 122°24.5′W</span></div>
+    <div class="srcs" id="srcs" aria-live="polite"></div>
+    <button class="btn sm" id="btnRefresh" title="Re-fetch all sources (ignores cache)">Refresh data</button>
+    <button class="btn sm" id="btnTheme" title="Cycle theme: auto / light / dark">Theme: auto</button>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="banner" id="banner" role="status"></div>
+
+  <!-- 01 go / no-go -->
+  <section class="gng" data-m="now" id="gng" aria-label="Go / no-go summary for the next four hours at Shilshole"></section>
+
+  <div class="grid2">
+    <!-- 02 map -->
+    <section class="panel" data-m="chart" aria-labelledby="hMap">
+      <header><h2 id="hMap"><span class="no">02</span>Chart</h2><span class="hint" id="mapHint">NOAA chart (depths in feet; safety contour follows your draft). Current arrows are tidal current at the slider time; wind arrows point where the wind blows to.</span></header>
+      <div class="mapbox">
+        <div id="map" role="application" aria-label="Map of Puget Sound with route, wind and current"></div>
+        <div class="legend" aria-hidden="true"><span><b style="background:var(--flood)"></b>flood</span><span><b style="background:var(--ebb)"></b>ebb</span><span><b style="background:#2a7f9c"></b>wind →</span></div>
+      </div>
+      <div class="maptime">
+        <span class="lab">Map time</span>
+        <input type="range" id="mapT" min="0" max="143" step="1" value="0" aria-label="Map time">
+        <span><output id="mapTout"></output> <button class="btn sm" id="btnMapDep" title="Jump to planned departure">Departure</button> <button class="btn sm" id="btnMapNow">Now</button></span>
+      </div>
+    </section>
+
+    <!-- 03 planner -->
+    <aside class="panel" data-m="plan" aria-labelledby="hPlan">
+      <header><h2 id="hPlan"><span class="no">03</span>Trip planner</h2></header>
+      <div class="pbody">
+        <div class="fld"><span>Route (from Shilshole Bay Marina)</span><select id="routeSel"></select></div>
+        <p class="note" id="routeNote" style="margin:6px 0 0"></p>
+
+        <div id="customBar" class="row sect" hidden>
+          <button class="btn sm" id="btnUndo">Undo last</button>
+          <button class="btn sm" id="btnClear">Clear</button>
+          <button class="btn sm" id="btnCopy" title="Start the custom route from the preset you were viewing">Copy preset here</button>
+          <span class="note" style="flex:1 1 100%">Click the map to add waypoints; drag the yellow dots to move them. Keep legs on open water — nothing here checks for land.</span>
+        </div>
+
+        <div class="sect" id="legSect">
+          <details class="fold" open><summary id="legSum">Legs · <span id="legTotal"></span></summary>
+            <div class="tbl-wrap" id="legList" style="max-height:260px;overflow:auto"></div></details>
+        </div>
+
+        <div class="sect">
+          <div class="row">
+            <label class="fld"><span>Depart (local)</span><input type="datetime-local" id="depart" step="900"></label>
+            <button class="btn" id="btnHour" title="Next whole hour">Next hour</button>
+          </div>
+        </div>
+
+        <div class="sect">
+          <span class="lab">Boat</span>
+          <div class="row">
+            <label class="fld"><span>Type</span><select id="boatType"></select></label>
+            <label class="fld"><span>LOA ft</span><input type="number" id="loa" min="15" max="80" step="1" inputmode="decimal"></label>
+            <label class="fld"><span>LWL ft</span><input type="number" id="lwl" min="12" max="70" step="0.5" inputmode="decimal"></label>
+          </div>
+          <div class="row" style="margin-top:8px">
+            <label class="fld"><span>Hull speed kt</span><input type="text" id="hull" readonly aria-readonly="true"></label>
+            <label class="fld"><span>Sailing perf %</span><input type="number" id="perf" min="50" max="110" step="5" inputmode="numeric"></label>
+            <label class="fld"><span>Motor kt</span><input type="number" id="motorKt" min="2" max="9" step="0.1" inputmode="decimal"></label>
+          </div>
+          <div class="row" style="margin-top:8px">
+            <label class="fld"><span>Draft ft</span><input type="number" id="draft" min="1" max="15" step="0.1" inputmode="decimal"></label>
+            <label class="fld"><span>Safety margin ft</span><input type="number" id="margin" min="0" max="10" step="0.5" inputmode="decimal"></label>
+            <span class="note" style="flex:2 1 160px">Depth check: draft + margin also sets the chart's safety contour.</span>
+          </div>
+          <div style="margin-top:8px">
+            <div class="chk"><input type="checkbox" id="motorLight"><label for="motorLight">Motor when wind below</label><input type="number" id="motorBelow" min="1" max="15" step="1" style="width:64px" inputmode="numeric"><span class="note">kt</span></div>
+            <div class="chk"><input type="checkbox" id="motorWind"><label for="motorWind">Motor to windward instead of tacking</label></div>
+            <div class="chk"><input type="checkbox" id="motorSail"><label for="motorSail">Motor-sail (sails up while motoring)</label></div>
+          </div>
+        </div>
+
+        <div class="row sect">
+          <button class="btn primary" id="btnCalc" style="flex:1 1 140px">Calculate</button>
+          <button class="btn" id="btnReturn" style="flex:1 1 140px" disabled>Return trip</button>
+        </div>
+        <div id="retBar" class="row" style="margin-top:8px" hidden>
+          <label class="fld"><span>Return departure (local)</span><input type="datetime-local" id="retDepart" step="900"></label>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <div class="stack" style="margin-top:14px">
+    <!-- 04 results -->
+    <section class="panel" data-m="plan" aria-labelledby="hRes" id="resPanel" hidden>
+      <header><h2 id="hRes"><span class="no">04</span>Passage</h2><span class="hint">Model estimate: forecast wind + NOAA tidal current. Not a substitute for judgement.</span></header>
+      <div class="pbody" id="resBody"></div>
+    </section>
+
+    <!-- 05 best departure -->
+    <section class="panel" data-m="plan" aria-labelledby="hBest" id="bestPanel" hidden>
+      <header><h2 id="hBest"><span class="no">05</span>Best departure</h2><span class="hint">Daylight departures every 30 min over the next 36 h. Click a bar to plan it.</span></header>
+      <div class="pbody"><div class="chartbox" id="bestChart"></div><div id="bestTxt" class="note" style="margin-top:6px"></div></div>
+    </section>
+
+    <!-- 06 wind -->
+    <section class="panel" data-m="now" aria-labelledby="hWx">
+      <header><h2 id="hWx"><span class="no">06</span>Wind &amp; weather · 72 h</h2>
+        <label class="fld" style="margin-left:auto;min-width:200px"><span class="sr">Forecast point</span><select id="wxPoint"></select></label></header>
+      <div class="pbody"><div class="chartbox" id="wxChart"></div>
+        <div class="legendrow"><span style="--c:var(--wind-2)">wind kt (bar)</span><span style="--c:var(--ink-2)">gust</span><span style="--c:var(--navy)">precip chance</span><span style="--c:var(--now)">now</span><span style="--c:var(--sun)">trip</span></div>
+        <div class="note" id="wxSrc" style="margin-top:4px"></div></div>
+    </section>
+
+    <!-- 07 tides -->
+    <section class="panel" data-m="tide" aria-labelledby="hTide">
+      <header><h2 id="hTide"><span class="no">07</span>Tide · Shilshole Bay · 24 h</h2><span class="hint" id="tideSrc"></span></header>
+      <div class="pbody"><div class="chartbox" id="tideChart"></div><div id="tideList" class="note" style="margin-top:6px"></div></div>
+    </section>
+
+    <div class="two">
+      <!-- 08 currents -->
+      <section class="panel" data-m="tide" aria-labelledby="hCur">
+        <header><h2 id="hCur"><span class="no">08</span>Tidal currents</h2><span class="hint">NOAA predictions · next events</span></header>
+        <div class="pbody"><div class="tbl-wrap" id="curTbl"></div><p class="note" id="curNote"></p></div>
+      </section>
+      <!-- 09 nws -->
+      <section class="panel" data-m="now" aria-labelledby="hNws">
+        <header><h2 id="hNws"><span class="no">09</span>NWS marine</h2>
+          <div class="tabs" id="zoneTabs" style="margin-left:auto"></div></header>
+        <div class="pbody"><div id="alertsBox"></div><pre class="nws" id="zoneTxt" tabindex="0">Loading…</pre><div class="note" id="zoneMeta" style="margin-top:4px"></div></div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<nav class="mtabs" id="mtabs" aria-label="Sections">
+  <button type="button" data-tab="now" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9h11a3 3 0 1 0-3-3M3 15h15a3 3 0 1 1-3 3M3 12h8"/></svg>Now</button>
+  <button type="button" data-tab="chart" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14"/></svg>Chart</button>
+  <button type="button" data-tab="plan" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20 10 8l4 6 6-10M18 4h2v2"/></svg>Plan</button>
+  <button type="button" data-tab="tide" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12c3-4 5-4 8 0s5 4 8 0 4-2 4-2M2 18c3-3 5-3 8 0s5 3 8 0"/></svg>Tide</button>
+</nav>
+
+<footer>
+  <div class="disc"><b>Not for navigation.</b> Forecast and model output only. Wind, tide and current values come from public models (Open-Meteo, NOAA CO-OPS predictions, NWS) and the routes and ETA are a rough planning aid — they ignore traffic separation lanes, wakes, rips, ferries, fog and your boat's real performance, and the depth check uses a smoothed bathymetry grid that can miss rocks, pilings and narrow shoals. Check the NOAA charts, the current NWS forecast and Notices to Mariners before leaving the dock, and make your own call.</div>
+  <p style="margin:8px 0 0">Data: <a href="https://open-meteo.com/">Open-Meteo</a> · <a href="https://tidesandcurrents.noaa.gov/">NOAA CO-OPS</a> · <a href="https://www.weather.gov/sew/">NWS Seattle</a> · chart: <a href="https://nauticalcharts.noaa.gov/data/gis-data-and-services.html">NOAA Office of Coast Survey</a> (Chart Display Service) · depth grid: <a href="https://www.ncei.noaa.gov/products/coastal-digital-elevation-models">NOAA NCEI</a> bathymetric DEMs · alt. map © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors · <a href="https://www.openseamap.org/">OpenSeaMap</a> · <a href="https://leafletjs.com/">Leaflet</a></p>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="js/model.js"></script>
+<script src="js/routes.js"></script>
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
